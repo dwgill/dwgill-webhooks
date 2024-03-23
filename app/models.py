@@ -3,24 +3,8 @@ import hashlib
 import secrets
 import datetime as dt
 from typing import Annotated, Literal, Optional, TypeAlias, TypedDict, cast
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import (
-    Computed,
-    DateTime,
-    ForeignKey,
-    Integer,
-    String,
-    func,
-    insert,
-    select,
-)
-from sqlalchemy.orm import Mapped, validates
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
+from pydantic import field_validator
 from app.emails import InvalidEmailError, validate_email
-from sqlalchemy.orm import MappedAsDataclass
-from sqlalchemy.orm import relationship
-from sqlalchemy.ext.asyncio import AsyncAttrs
 from app.passwords import (
     PasswordVersion,
     hash_new_password,
@@ -29,68 +13,54 @@ from app.passwords import (
     UnknownPasswordVersion,
     validate_password_version,
 )
-import sqlalchemy.exc
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlmodel import Field, SQLModel, Computed, func, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
-class Base(AsyncAttrs, DeclarativeBase):
-    pass
-
-
-class UserDB(Base):
-    __tablename__ = "user"
-
-    id: Mapped[int] = mapped_column(Integer(), primary_key=True)
-    username: Mapped[str] = mapped_column(String())
-    updated_datetime: Mapped[dt.datetime] = mapped_column(
-        DateTime(), server_default=func.now(), onupdate=func.now()
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_datetime: Optional[dt.datetime] = Field(
+        default=None,
+        allow_mutation=False,
+        sa_column_kwargs={
+            "server_default": func.now(),
+        },
     )
-    created_datetime: Mapped[dt.datetime] = mapped_column(
-        DateTime(), server_default=func.now()
+    updated_datetime: Optional[dt.datetime] = Field(
+        default=None,
+        allow_mutation=False,
+        sa_column_kwargs={"server_default": func.now(), "onupdate": func.now()},
     )
-    username_lc: Mapped[str] = mapped_column(
-        String(),
-        Computed("LOWER(username)"),
+    username: str = Field()
+    username_lc: Optional[str] = Field(
+        default=None,
         unique=True,
+        allow_mutation=False,
+        sa_column_args=(
+            (
+                Computed(
+                    "LOWER(username)",
+                ),
+            )
+        ),
     )
-    email: Mapped[str] = mapped_column(String())
-    email_lc: Mapped[str] = mapped_column(
-        String(),
-        Computed("LOWER(email)"),
+    email: str = Field()
+    email_lc: Optional[str] = Field(
+        default=None,
         unique=True,
+        allow_mutation=False,
+        sa_column_args=(
+            (
+                Computed(
+                    "LOWER(email)",
+                ),
+            )
+        ),
     )
-    password_hash: Mapped[str] = mapped_column(String())
-    password_salt: Mapped[str] = mapped_column(String())
-    password_version: Mapped[int] = mapped_column(Integer())
-    tokens: Mapped[list["TokenDB"]] = relationship(back_populates="user")
-
-    @validates("email")
-    def _validate_email(self, key: str, email: str):
-        try:
-            return validate_email(email)
-        except InvalidEmailError as e:
-            raise ValueError(f"Invalid email: {e.error_message.lower()}")
-
-    @validates("username")
-    def _validate_username(self, key: str, username: str):
-        username = username.strip()
-        if not username:
-            raise ValueError("Username cannot be empty")
-
-        return username
-
-    @validates("updated_datetime", "created_datetime")
-    def _validate_datetimes(self, key: str, value: dt.datetime):
-        if value.tzinfo is not None:
-            value.astimezone(dt.timezone.utc)
-
-        return value
-
-    @validates("password_version")
-    def _validate_password_version(self, key: str, password_version: int):
-        if not validate_password_version(password_version):
-            raise UnknownPasswordVersion(password_version)
-
-        return password_version
+    password_hash: str = Field()
+    password_salt: str = Field()
+    password_version: int = Field()
 
     def test_password(self, password_plaintext: str) -> bool:
         return test_password_plaintext_against_hash(
@@ -100,63 +70,128 @@ class UserDB(Base):
             password_version=self.password_version,
         )
 
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, email: str):
+        try:
+            return validate_email(email)
+        except InvalidEmailError as e:
+            raise ValueError(f"Invalid email: {e.error_message.lower()}")
 
-class TokenDB(Base):
-    __tablename__ = "token"
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, username: str):
+        username = username.strip()
+        if not username:
+            raise ValueError("Username cannot be empty")
 
-    id: Mapped[int] = mapped_column(Integer(), primary_key=True)
-    value: Mapped[str] = mapped_column(String())
-    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user.id"), nullable=True, index=True)
-    user: Mapped[Optional["UserDB"]] = relationship(back_populates="tokens")
+        return username
+
+    @field_validator("updated_datetime", "created_datetime")
+    @classmethod
+    def _validate_datetimes(cls, value: dt.datetime):
+        if value.tzinfo is not None:
+            value.astimezone(dt.timezone.utc)
+
+        return value
+
+    @field_validator("password_version")
+    @classmethod
+    def _validate_password_version(cls, password_version: int):
+        if not validate_password_version(password_version):
+            raise UnknownPasswordVersion(password_version)
+
+        return password_version
 
 
-async def recreate_tables(engine: AsyncEngine):
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
-        await connection.run_sync(Base.metadata.create_all)
+class Token(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_datetime: Optional[dt.datetime] = Field(
+        default=None,
+        allow_mutation=False,
+        sa_column_kwargs={
+            "server_default": func.now(),
+        },
+    )
+    updated_datetime: Optional[dt.datetime] = Field(
+        default=None,
+        allow_mutation=False,
+        sa_column_kwargs={"server_default": func.now(), "onupdate": func.now()},
+    )
+    
+
+
+# class TokenDB(Base):
+#     __tablename__ = "token"
+
+#     id: Mapped[int] = mapped_column(Integer(), primary_key=True)
+#     value: Mapped[str] = mapped_column(String())
+#     user_id: Mapped[Optional[int]] = mapped_column(
+#         ForeignKey("user.id"), nullable=True, index=True
+#     )
+#     user: Mapped[Optional["UserDB"]] = relationship(back_populates="tokens")
+
+
+# async def recreate_tables(engine: AsyncEngine):
+#     async with engine.begin() as connection:
+#         await connection.run_sync(Base.metadata.drop_all)
+#         await connection.run_sync(Base.metadata.create_all)
+
+#     async with AsyncSession(engine) as session, session.begin():
+#         foobar = UserDB(
+#             username="FooBar",
+#             email="foo.bar@example.com",
+#             **hash_new_password(
+#                 password_plaintext="Password123",
+#             ),
+#         )
+
+#         barfoo = UserDB(
+#             username="BarFOo",
+#             email="bar.foo@example.com",
+#             **hash_new_password(
+#                 password_plaintext="!Password123",
+#             ),
+#         )
+
+#         foobar.tokens.append(TokenDB(value="foobar_token"))
+
+#         barfoo.tokens.append(TokenDB(value="barfoo_token"))
+
+#         session.add(foobar)
+#         session.add(barfoo)
+
+
+async def main():
+    engine = create_async_engine("sqlite+aiosqlite:///./database.db", echo=True)
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(User.metadata.drop_all)
+        await conn.run_sync(User.metadata.create_all)
 
     async with AsyncSession(engine) as session, session.begin():
-        foobar = UserDB(
+        user_1 = User(
             username="FooBar",
             email="foo.bar@example.com",
             **hash_new_password(
                 password_plaintext="Password123",
             ),
         )
-
-        barfoo = UserDB(
-            username="BarFOo",
+        user_2 = User(
+            username="BarFoo",
             email="bar.foo@example.com",
             **hash_new_password(
-                password_plaintext="!Password123",
+                password_plaintext="Password123",
             ),
         )
+        session.add(user_1)
+        session.add(user_2)
 
-        foobar.tokens.append(TokenDB(
-            value="foobar_token"
-        ))
+    async with AsyncSession(engine) as session:
+        statement = select(User).where(User.username_lc == "foobar")
+        for user in await session.exec(statement):
+            print(f'User {user.username}, password test: {user.test_password("Password123")}')
 
-        barfoo.tokens.append(TokenDB(
-            value="barfoo_token"
-        ))
-
-        session.add(foobar)
-        session.add(barfoo)
-
-
-
-async def main():
-    engine = create_async_engine("sqlite+aiosqlite:///./database.db", echo=True)
-
-    await recreate_tables(engine)
-
-    async with AsyncSession(engine) as session, session.begin():
-        result = await session.execute(
-            select(UserDB).where(UserDB.username_lc == "foobar")
-        )
-        row = result.scalar_one()
-
-        
 
 
 if __name__ == "__main__":
