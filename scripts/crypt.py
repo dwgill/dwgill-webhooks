@@ -1,5 +1,4 @@
 import argparse
-import secrets
 from typing import Any, Literal
 from cryptography.fernet import Fernet
 from pathlib import Path

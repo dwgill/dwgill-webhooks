@@ -2,7 +2,7 @@ import asyncio
 import datetime as dt
 from typing import Mapping, Optional, cast
 from pydantic import field_validator
-from app.secrets import (
+from app.hashing import (
     test_secret_plaintext_against_hash,
 )
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -11,7 +11,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
 import sqlalchemy.orm.attributes
 
-import app.env
+import env
 
 
 class Token(SQLModel, table=True):
@@ -33,7 +33,7 @@ class Token(SQLModel, table=True):
     secret_version: int = Field()
 
     permissions: Mapping[str, str] = Field(
-        sa_type=PG_JSONB if app.env.database_connection_type() == "postgresql" else JSON
+        sa_type=PG_JSONB if env.database_connection_type() == "postgresql" else JSON
     )
 
     @classmethod
@@ -61,7 +61,7 @@ class Token(SQLModel, table=True):
 
 
 async def main():
-    engine = create_async_engine(app.env.database_connection_string(), echo=True)
+    engine = create_async_engine(env.database_connection_string(), echo=True)
 
     async with engine.begin() as conn:
         await conn.run_sync(Token.metadata.drop_all)

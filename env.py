@@ -1,13 +1,13 @@
 import os
 import functools
 from typing import Callable, Literal, overload
-from sqlalchemy.engine.url import make_url
+import sqlalchemy.engine.url
 from dotenv import load_dotenv
-from .secrets import new_salt 
+from secrets import token_urlsafe
+from pathlib import Path
 
-load_dotenv()
-
-_MISSING_VALUE = new_salt(secret_version=1)
+load_dotenv(os.environ.get("ENV_FILE_PATH", str(Path.cwd() / ".env")))
+_MISSING_VALUE = token_urlsafe(30)
 
 
 @overload
@@ -43,12 +43,13 @@ def _get_env_var[
 def database_connection_string() -> str:
     def coerce_connection_string(db_url: str):
         try:
-            make_url(db_url)
+            sqlalchemy.engine.url.make_url(db_url)
         except Exception as e:
             raise InvalidEnvVarError("DATABASE_CONNECTION_STRING", db_url) from e
         return db_url
 
     return _get_env_var("DATABASE_CONNECTION_STRING", coerce=coerce_connection_string)
+
 
 def database_connection_type() -> Literal["sqlite", "postgresql"]:
     connection_string = database_connection_string()
@@ -58,16 +59,22 @@ def database_connection_type() -> Literal["sqlite", "postgresql"]:
     elif connection_string.startswith("postgresql"):
         return "postgresql"
     else:
-        raise ValueError(f"Unsupported database connection string type: {connection_string}")
+        raise ValueError(
+            f"Unsupported database connection string type: {connection_string}"
+        )
 
 
 def _surround_with_quotes(string: str) -> str:
-    if '"' in string:
+    if "'" not in string:
         return f"'{string}'"
-    elif "'" in string:
+
+    if '"' not in string:
         return f'"{string}"'
-    else:
-        return f'''"""{string}"""'''
+
+    if "'''" not in string:
+        return f"'''{string}'''"
+
+    return f'"""{string}"""'
 
 
 class MissingEnvVarError(ValueError):
