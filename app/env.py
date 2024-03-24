@@ -47,7 +47,6 @@ def database_connection_string() -> str:
 
     return _get_env_var("DATABASE_CONNECTION_STRING", coerce=coerce_connection_string)
 
-@functools.lru_cache(1)
 def database_connection_type() -> Literal["sqlite", "postgresql"]:
     connection_string = database_connection_string()
 

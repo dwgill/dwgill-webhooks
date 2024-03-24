@@ -1,22 +1,16 @@
 import asyncio
-import hashlib
-import secrets
 import datetime as dt
-from typing import Annotated, Literal, Mapping, Optional, TypeAlias, TypedDict, cast
+from typing import Mapping, Optional, cast
 from pydantic import field_validator
-from app.emails import InvalidEmailError, validate_email
 from app.secrets import (
-    SecretVersion,
-    hash_new_secret,
-    latest_secret_version,
     test_secret_plaintext_against_hash,
-    UnknownSecretVersion,
-    validate_secret_version,
 )
 from sqlalchemy.ext.asyncio import create_async_engine
-from sqlmodel import Field, SQLModel, Computed, func, select, JSON
+from sqlmodel import Field, SQLModel, func, JSON
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB
 import sqlalchemy.orm.attributes
+
 import app.env
 
 
@@ -37,7 +31,10 @@ class Token(SQLModel, table=True):
     secret_hash: str = Field()
     secret_salt: str = Field()
     secret_version: int = Field()
-    permissions: Mapping[str, str] = Field(sa_type=JSON)
+
+    permissions: Mapping[str, str] = Field(
+        sa_type=PG_JSONB if app.env.database_connection_type() == "postgresql" else JSON
+    )
 
     @classmethod
     def permissions_comp(cls):
@@ -72,12 +69,6 @@ async def main():
 
     async with AsyncSession(engine) as session, session.begin():
         pass
-
-    # async with AsyncSession(engine) as session, session.begin():
-    #     statement = select(Token).where(Token.foo_comp().contains('"bar"'))
-    #     result = await session.exec(statement)
-    #     token = result.one()
-    #     token.foo = ("this", "worked")
 
 
 if __name__ == "__main__":
