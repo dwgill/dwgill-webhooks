@@ -2,7 +2,10 @@ import os
 import functools
 from typing import Callable, Literal, overload
 from sqlalchemy.engine.url import make_url
-from .secrets import new_salt
+from dotenv import load_dotenv
+from .secrets import new_salt 
+
+load_dotenv()
 
 _MISSING_VALUE = new_salt(secret_version=1)
 

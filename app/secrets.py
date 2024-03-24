@@ -134,26 +134,33 @@ def _cli_main():
 
     args = parser.parse_args()
 
-    if args.command == "new":
-        plaintext_secret: str = args.plaintext_secret
-        secret_version: int = args.version
-        secret_details = hash_new_secret(secret_plaintext=plaintext_secret, secret_version=secret_version)
-        print("Hashed secret:", secret_details["secret_hash"])
-        print("Salt:", secret_details["secret_salt"])
-        print("Version:", secret_details["secret_version"])
-    elif args.command == "test":
-        plaintext_secret: str = args.plaintext_secret
-        hashed_secret: str = args.hashed_secret
-        salt: str = args.salt
-        secret_version: int = args.version
-        result = test_secret_plaintext_against_hash(
-            secret_plaintext=plaintext_secret,
-            secret_hash=hashed_secret,
-            secret_salt=salt,
-            secret_version=secret_version,
-        )
-        print("Result:", result)
-        print("Version:", secret_version)
+    command: Literal["new", "test"] = args.command
+
+    match command:
+        case "new":
+            plaintext_secret: str = args.plaintext_secret
+            secret_version: int = args.version
+            secret_details = hash_new_secret(
+                secret_plaintext=plaintext_secret, secret_version=secret_version
+            )
+            print("Hashed secret:", secret_details["secret_hash"])
+            print("Salt:", secret_details["secret_salt"])
+            print("Version:", secret_details["secret_version"])
+        case "test":
+            plaintext_secret: str = args.plaintext_secret
+            hashed_secret: str = args.hashed_secret
+            salt: str = args.salt
+            secret_version: int = args.version
+            result = test_secret_plaintext_against_hash(
+                secret_plaintext=plaintext_secret,
+                secret_hash=hashed_secret,
+                secret_salt=salt,
+                secret_version=secret_version,
+            )
+            print("Result:", result)
+            print("Version:", secret_version)
+        case _:
+            parser.print_help()
 
 if __name__ == "__main__":
     _cli_main()
