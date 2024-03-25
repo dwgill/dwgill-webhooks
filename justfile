@@ -11,7 +11,7 @@ _ensure_env_file:
     touch "$PWD/.env"
 
 models: _ensure_env_file
-    poetry run python -m app.models
+    poetry run python -m app.models "$@"
 
 secrets *ARGS: _ensure_env_file
     poetry run python -m app.secrets "$@"

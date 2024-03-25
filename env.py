@@ -2,12 +2,12 @@ import os
 import functools
 from typing import Callable, Literal, overload
 import sqlalchemy.engine.url
-from dotenv import load_dotenv
-from secrets import token_urlsafe
+from dotenv import dotenv_values
 from pathlib import Path
 
-load_dotenv(os.environ.get("ENV_FILE_PATH", str(Path.cwd() / ".env")))
-_MISSING_VALUE = token_urlsafe(30)
+env_file_values = dotenv_values(
+    os.environ.get("ENV_FILE_PATH", str(Path.cwd() / ".env"))
+)
 
 
 @overload
@@ -25,9 +25,12 @@ def _get_env_var[
 def _get_env_var[
     T
 ](key: str, default: str | None = None, *, coerce: Callable[[str], T] = str,) -> T:
-    str_value = os.environ.get(key, _MISSING_VALUE)
+    if key in env_file_values:
+        str_value = env_file_values[key]
+    else:
+        str_value = os.environ.get(key, None)
 
-    if str_value == _MISSING_VALUE:
+    if str_value is None:
         if default is None:
             raise MissingEnvVarError(key)
         else:
@@ -37,7 +40,6 @@ def _get_env_var[
         return coerce(str_value)
     except (ValueError, TypeError) as e:
         raise InvalidEnvVarError(key, str_value) from e
-
 
 @functools.lru_cache(1)
 def database_connection_string() -> str:
