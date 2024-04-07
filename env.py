@@ -25,10 +25,9 @@ def _get_env_var[
 def _get_env_var[
     T
 ](key: str, default: str | None = None, *, coerce: Callable[[str], T] = str,) -> T:
-    if key in env_file_values:
-        str_value = env_file_values[key]
-    else:
-        str_value = os.environ.get(key, None)
+    str_value = os.environ.get(key, None)
+    if str_value is None:
+        str_value = env_file_values.get(key, None)
 
     if str_value is None:
         if default is None:

@@ -1,4 +1,3 @@
-import argparse
 from typing import Any, Literal
 from cryptography.fernet import Fernet
 from pathlib import Path
@@ -42,6 +41,8 @@ def decrypt_file(
 
 
 def main():
+    import argparse
+
     parser = argparse.ArgumentParser(description="Encrypt or decrypt a file")
     subparsers = parser.add_subparsers(title="subcommands", dest="subcommand")
 
@@ -93,6 +94,11 @@ def main():
         help="The file to place the new encryption key",
         type=Path,
     )
+    new_key_parser.add_argument(
+        "--force",
+        help="Force overwrite if the key file already exists",
+        action="store_true",
+    )
 
     args = parser.parse_args()
 
@@ -101,6 +107,10 @@ def main():
     match subcommand:
         case "new-key":
             key_file_path: Path = args.key_file
+            if key_file_path.exists() and not args.force:
+                raise ValueError(
+                    f"Key file already exists at {key_file_path.absolute()}"
+                )
             new_key_file(key_file_path=key_file_path)
             print(f'Created new key file at "{key_file_path.absolute()}"')
         case "encrypt":
@@ -112,7 +122,9 @@ def main():
                 encrypted_destination_path=encrypted_destination_file,
                 key_bytes=read_key_file(key_file_path=key_file_path),
             )
-            print(f'Created encrypted file at "{encrypted_destination_file.absolute()}"')
+            print(
+                f'Created encrypted file at "{encrypted_destination_file.absolute()}"'
+            )
         case "decrypt":
             encrypted_source_file: Path = args.encrypted_source
             plaintext_destination_file: Path = args.plaintext_destination
@@ -122,9 +134,12 @@ def main():
                 plaintext_destination_path=plaintext_destination_file,
                 key_bytes=read_key_file(key_file_path=key_file_path),
             )
-            print(f'Created plaintext file at "{plaintext_destination_file.absolute()}"')
+            print(
+                f'Created plaintext file at "{plaintext_destination_file.absolute()}"'
+            )
         case _:
             parser.print_help()
+
 
 if __name__ == "__main__":
     main()
